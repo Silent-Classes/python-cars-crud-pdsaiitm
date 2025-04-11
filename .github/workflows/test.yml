@@ -1,0 +1,48 @@
+name: Test and Post Results (No Auth)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test-and-post:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest > result.txt
+
+      - name: Send results to Google Sheets
+        run: |
+          PASSED=$(grep -oP '\d+(?= passed)' result.txt || echo 0)
+          TOTAL=$(grep -oP '\d+(?= in )' result.txt || echo 0)
+
+          REPO_NAME="${{ github.repository }}"
+          REPO_NAME_ONLY="${REPO_NAME##*/}"
+          ASSIGNMENT_NAME="${REPO_NAME_ONLY%-*}"
+
+          GITHUB_USERNAME="${{ github.actor }}"
+          GITHUB_ACCOUNT_URL="https://github.com/${GITHUB_USERNAME}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+
+          curl -X POST https://script.google.com/macros/s/AKfycbwNweDcVZOnYzsAL7FqAiB2-UaeeSXhdyZw5K5cRRHnqZanifCVNcogHIZamGQ00-YkcQ/exec \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"github_username\": \"${GITHUB_USERNAME}\",
+              \"github_account_url\": \"${GITHUB_ACCOUNT_URL}\",
+              \"commit_url\": \"${COMMIT_URL}\",
+              \"assignment_name\": \"${ASSIGNMENT_NAME}\",
+              \"passed_tests\": $PASSED,
+              \"total_tests\": $TOTAL
+            }"
